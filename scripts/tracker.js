@@ -20,8 +20,10 @@ function initTracker() {
     const travelDiv = document.createElement("div");
     travelDiv.id = "travel-tracker-widget";
     travelDiv.classList.add("hud-section", "travel-section");
+    // Default State
     travelDiv.innerHTML = `<span class="travel-icon">⛺</span><div class="travel-data"><span class="travel-state">Resting</span><span class="travel-subtext">Weather: Stable</span></div>`;
     
+    // Inject at top of content to match your screenshot
     const box = hudElement.querySelector(".hud-box .hud-content");
     if (box) box.insertBefore(travelDiv, box.firstChild);
 }
@@ -88,7 +90,7 @@ async function runMoveLogic(token) {
     }
 }
 
-// --- ENCOUNTER ENGINE ---
+// --- ENCOUNTER ENGINE (The Fail-Safe One) ---
 async function checkEncounter(terrainType) {
     if (terrainType === "safe" || terrainType === "road") return;
     const threshold = game.settings.get(MODULE_ID, "encounterChance");
@@ -97,28 +99,43 @@ async function checkEncounter(terrainType) {
     console.log(`Grimoire Encounter | ${terrainType.toUpperCase()}: Rolled ${roll} vs ${threshold}`);
 
     if (roll >= threshold) {
-        const tableName = `Encounters: ${capitalize(terrainType)}`;
-        const table = game.tables.getName(tableName);
+        // Look for Settings First (If we implement the menu later)
+        const mappings = game.settings.get(MODULE_ID, "terrainMappings") || {};
+        const config = mappings[terrainType] || {};
+
+        let table = config.table ? game.tables.get(config.table) : null;
+        if (!table) {
+            // Smart Search Fallback
+            const tableName = `Encounters: ${capitalize(terrainType)}`;
+            table = game.tables.getName(tableName);
+        }
+
+        let mapButton = "";
+        // Smart Search Maps
         const mapMatches = game.scenes.filter(s => {
             const n = s.name.toLowerCase();
             return (n.includes("battlemap") && n.includes(terrainType));
         });
 
-        let tableBtn = table ? 
-            `<button data-action="roll-table" data-table-id="${table.id}">🎲 Roll ${tableName}</button>` : 
-            `<button data-action="manual-table" data-terrain="${terrainType}">🔎 Choose Table...</button>`;
+        if (mapMatches.length > 0) {
+            const randomScene = mapMatches[Math.floor(Math.random() * mapMatches.length)];
+            mapButton = `<button data-action="activate-scene" data-scene-id="${randomScene.id}">📍 Load Map: ${randomScene.name}</button>`;
+        } else {
+            // MANUAL FALLBACK BUTTON
+            mapButton = `<button data-action="manual-scene" data-terrain="${terrainType}">🔎 Choose Map...</button>`;
+        }
 
-        let mapBtn = mapMatches.length > 0 ? 
-            `<button data-action="activate-scene" data-scene-id="${mapMatches[0].id}">📍 Load Map: ${mapMatches[0].name}</button>` : 
-            `<button data-action="manual-scene" data-terrain="${terrainType}">🔎 Choose Map...</button>`;
+        let tableButton = table ? 
+            `<button data-action="roll-table" data-table-id="${table.id}">🎲 Roll ${table.name}</button>` : 
+            `<button data-action="manual-table" data-terrain="${terrainType}">🔎 Choose Table...</button>`;
 
         ChatMessage.create({
             speaker: { alias: "Grimoire Encounter" },
             content: `
-                <div style="background: #1a1a1a; color: #eee; padding: 10px; border: 1px solid #a00;">
+                <div style="background: #1a1a1a; color: #eee; padding: 10px; border: 1px solid #a00; border-radius:5px;">
                     <h3 style="border-bottom: 2px solid #a00; margin-bottom: 8px;">⚔️ Encounter!</h3>
                     <p>Ambush in the <b>${terrainType.toUpperCase()}</b>.</p>
-                    <div style="display: flex; gap: 5px; flex-direction: column;">${tableBtn}${mapBtn}</div>
+                    <div style="display: flex; gap: 5px; flex-direction: column;">${tableButton}${mapButton}</div>
                 </div>
             `
         });
@@ -135,12 +152,21 @@ Hooks.on("renderChatMessage", (app, html, data) => {
         const table = game.tables.get(ev.currentTarget.dataset.tableId);
         if (table) table.draw();
     });
+    // MANUAL SELECTORS
     html.find("button[data-action='manual-scene']").click(ev => {
         let options = game.scenes.map(s => `<option value="${s.id}">${s.name}</option>`).join("");
         new Dialog({
-            title: "Select Map",
+            title: "Select Battle Map",
             content: `<select id="scene-select" style="width:100%">${options}</select>`,
             buttons: { go: { label: "Load", callback: (h) => game.scenes.get(h.find("#scene-select").val())?.view() } }
+        }).render(true);
+    });
+    html.find("button[data-action='manual-table']").click(ev => {
+        let options = game.tables.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
+        new Dialog({
+            title: "Select Encounter Table",
+            content: `<select id="table-select" style="width:100%">${options}</select>`,
+            buttons: { go: { label: "Roll", callback: (h) => game.tables.get(h.find("#table-select").val())?.draw() } }
         }).render(true);
     });
 });
@@ -152,6 +178,7 @@ function normalizeTerrain(rawName) {
     if (n.includes("mountain")) return "mountain";
     if (n.includes("snow") || n.includes("ice")) return "snow";
     if (n.includes("road")) return "road";
+    if (n.includes("forest") || n.includes("wood")) return "forest";
     return "wilderness";
 }
 
