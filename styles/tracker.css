@@ -1,0 +1,23 @@
+/* We reuse the HUD's layout classes, but define specific travel styles here */
+
+.travel-section {
+    /* Stand out slightly with a different border color */
+    border-left: 3px solid #4caf50; 
+    background: rgba(76, 175, 80, 0.1) !important;
+}
+
+.travel-icon {
+    font-size: 1.2em;
+    margin-right: 8px;
+}
+
+.travel-text {
+    font-weight: bold;
+    color: #a5d6a7;
+}
+
+.travel-subtext {
+    font-size: 0.8em;
+    color: #aaa;
+    margin-left: 5px;
+}
