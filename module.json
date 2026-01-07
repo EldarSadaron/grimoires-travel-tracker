@@ -1,7 +1,7 @@
 {
   "id": "grimoires-travel-tracker",
   "title": "Grimoire's Travel Tracker",
-  "version": "0.2.0",
+  "version": "1.0.1",
   "manifest": "https://raw.githubusercontent.com/EldarSadaron/grimoires-travel-tracker/main/module.json",
   "download": "https://github.com/EldarSadaron/grimoires-travel-tracker/archive/refs/heads/main.zip",
   "compatibility": {

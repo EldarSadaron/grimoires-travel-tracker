@@ -1,7 +1,7 @@
 import { MODULE_ID, registerTrackerSettings } from "./settings.js";
 import { WeatherEngine } from "./weather.js";
 
-// Global Singleton Debounce (As per your V13 notes)
+// GLOBAL SINGLETON DEBOUNCE (Your Code)
 let travelTimeout = null; 
 
 Hooks.once("init", () => {
@@ -27,6 +27,7 @@ function initTracker() {
     travelDiv.id = "travel-tracker-widget";
     travelDiv.classList.add("hud-section", "travel-section");
     
+    // Default "Resting" State
     travelDiv.innerHTML = `
         <span class="travel-icon">⛺</span>
         <div class="travel-data">
@@ -35,19 +36,20 @@ function initTracker() {
         </div>
     `;
 
+    // Insert at the top of the content box
     const box = hudElement.querySelector(".hud-box .hud-content");
     if (box) box.insertBefore(travelDiv, box.firstChild);
 }
 
-// --- MAIN TRAVEL LOGIC (Ported from travel_v2.js) ---
+// --- MAIN TRAVEL LOGIC (From travel_v2.js) ---
 Hooks.on("updateToken", (tokenDoc, changes) => {
     if ((!changes.x && !changes.y) || !game.user.isGM) return;
 
-    // Filter: Only run on World Map Scene
+    // Filter: Only run on the "World Map" scene (Defined in Settings)
     const targetSceneId = game.settings.get(MODULE_ID, "worldMapScene");
     if (targetSceneId !== "all" && tokenDoc.parent.id !== targetSceneId) return;
 
-    // GLOBAL SINGLETON DEBOUNCE 
+    // YOUR DEBOUNCE LOGIC
     if (travelTimeout) clearTimeout(travelTimeout);
     
     travelTimeout = setTimeout(() => {
@@ -59,7 +61,11 @@ Hooks.on("updateToken", (tokenDoc, changes) => {
 async function runMoveLogic(token) {
     if (!token || !token.actor) return;
 
-    // 1. Calculate Distance
+    const WALKING_SPEED = 3; // MPH
+    const ENCOUNTER_CHANCE = 18; // 1-20 Roll
+
+    // 1. Distance Calculation (Your Math)
+    // We use token.document.getFlag to be safe
     const lastX = token.document.getFlag(MODULE_ID, "lastX") || token.x;
     const lastY = token.document.getFlag(MODULE_ID, "lastY") || token.y;
     
@@ -69,78 +75,76 @@ async function runMoveLogic(token) {
     // Ignore micro-adjustments
     if (distPixels < canvas.grid.size) return;
 
-    // Save new position
+    // Update Flag FIRST to prevent loops
     await token.document.setFlag(MODULE_ID, "lastX", token.x);
     await token.document.setFlag(MODULE_ID, "lastY", token.y);
 
     // Convert to Miles (Grid Distance)
     const distMiles = (distPixels / canvas.scene.grid.size) * canvas.scene.grid.distance;
 
-    // 2. Calculate Speed (Slowest Member)
-    const speed = getPartySpeed(token); // Feet per round
-    const mph = speed / 10; // D&D 5e Standard: 30ft = 3mph
+    // 2. Time Calculation
+    let rawMinutes = (distMiles / WALKING_SPEED) * 60;
     
-    // 3. Calculate Time
-    // miles / mph = hours. * 60 = minutes.
-    let rawMinutes = (distMiles / mph) * 60;
+    // 3. Terrain Modifiers (Using V13 Region Check)
+    const currentTerrain = getTerrainTag(token);
     
-    // 4. Terrain Modifiers (V13 Region Check)
-    const terrain = getTerrainTag(token);
-    if (terrain.includes("difficult") || terrain.includes("swamp") || terrain.includes("mountain")) {
-        rawMinutes *= 2; // Double time for difficult terrain
-    } else if (terrain.includes("road")) {
-        rawMinutes *= 0.75; // Faster on roads
+    // Apply multipliers based on terrain keywords
+    if (currentTerrain.includes("difficult") || currentTerrain.includes("swamp") || currentTerrain.includes("mountain")) {
+        rawMinutes *= 2; 
+    } else if (currentTerrain.includes("road")) {
+        rawMinutes *= 0.75; 
     }
 
-    const minutesPassed = Math.max(10, Math.ceil(rawMinutes / 10) * 10);
+    const minutesPassed = Math.max(10, Math.ceil(rawMinutes / 10) * 10); // Round to 10m
 
-    // 5. Action: Advance Time
+    // 4. Action: Advance Time (if moved > 0.1 miles)
     if (distMiles > 0.1) {
         await game.time.advance(minutesPassed * 60);
         
-        // 6. Action: Trigger Weather Check
+        // 5. Action: Trigger Weather Check
+        let weatherChanged = false;
         if (globalThis.GrimoireWeather) {
-            await globalThis.GrimoireWeather.handleTimeChange(minutesPassed);
+            weatherChanged = await globalThis.GrimoireWeather.handleTimeChange(minutesPassed);
         }
         
-        // 7. Action: Update HUD Widget
-        updateWidget(distMiles, minutesPassed, terrain);
+        // 6. Action: Visual Update (Scorched Earth)
+        const lastTerrain = token.document.getFlag(MODULE_ID, "lastTerrain") || "none";
+        if (currentTerrain !== lastTerrain || weatherChanged) {
+            if (globalThis.GrimoireWeather) {
+                await globalThis.GrimoireWeather.applyWeather(game.settings.get(MODULE_ID, "weatherState").type);
+            }
+            await token.document.setFlag(MODULE_ID, "lastTerrain", currentTerrain);
+        }
+
+        // 7. Action: Update HUD (NEW)
+        updateWidget(distMiles, minutesPassed, currentTerrain);
+        
+        // 8. Action: Encounter Check (Your Logic)
+        const roll = Math.floor(Math.random() * 20) + 1;
+        if (roll >= ENCOUNTER_CHANCE) {
+            ui.notifications.warn(`⚔️ ENCOUNTER TRIGGERED in [${currentTerrain}]`);
+            // You can re-enable the table draw logic here if you have the tables set up
+        }
     }
 }
 
-// V13 Safe Region Check 
+// V13 SAFE REGION CHECK (From travel_v2.js)
 function getTerrainTag(token) {
     if (!canvas.regions) return "none";
     
     const point = { x: token.center.x, y: token.center.y, elevation: token.document.elevation };
     
-    // Find all regions containing the token center
     const regions = canvas.regions.placeables.filter(r => {
         if (!r.document) return false;
-        // Use the V13 API: RegionDocument.testPoint
+        // The Critical V13 Fix
         return typeof r.document.testPoint === 'function' ? r.document.testPoint(point) : false;
     });
 
     // Look for tags like "Terrain: Swamp"
     const terrain = regions.find(r => r.document.name.startsWith("Terrain:"));
-    if (terrain) return terrain.document.name.toLowerCase();
+    if (terrain) return "terrain_" + terrain.document.name.split(":")[1].trim().toLowerCase();
     
-    return "wilderness";
-}
-
-function getPartySpeed(token) {
-    // Future expansion: If token is a "Group Token", look up the actors inside.
-    // For now, check the single actor's walk speed.
-    const actor = token.actor;
-    if (!actor) return 30;
-
-    const rules = game.settings.get(MODULE_ID, "systemRules");
-    
-    if (rules === "dnd5e") {
-        return actor.system.attributes?.movement?.walk || 30;
-    }
-    // Add PF2e logic here if needed
-    return 30;
+    return "terrain_road"; // Default fallback
 }
 
 function updateWidget(miles, minutes, terrain) {
@@ -157,10 +161,9 @@ function updateWidget(miles, minutes, terrain) {
     stateEl.innerText = label;
     stateEl.style.color = "#ffd700"; // Active Gold
     
-    // Format: "3.5 mi (4h 20m)"
     const h = Math.floor(minutes / 60);
     const m = minutes % 60;
-    subEl.innerText = `Dist: ${miles.toFixed(1)}mi | Time: ${h}h ${m}m`;
+    subEl.innerText = `Last: ${miles.toFixed(1)}mi (${h}h ${m}m)`;
 
     // Auto-Reset
     clearTimeout(window.hudResetTimer);
