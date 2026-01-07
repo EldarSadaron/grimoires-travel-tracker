@@ -2,18 +2,30 @@
   "id": "grimoires-travel-tracker",
   "title": "Grimoire's Travel Tracker",
   "version": "0.2.0",
+  "manifest": "https://raw.githubusercontent.com/EldarSadaron/grimoires-travel-tracker/main/module.json",
+  "download": "https://github.com/EldarSadaron/grimoires-travel-tracker/archive/refs/heads/main.zip",
   "compatibility": {
     "minimum": "13",
     "verified": "13.351"
   },
-  "authors": [{ "name": "Eldar" }],
+  "authors": [
+    {
+      "name": "Eldar"
+    }
+  ],
   "relationships": {
     "requires": [
-      { "id": "grimoires-data-hud", "type": "module" },
-      { "id": "fxmaster", "type": "module" }
+      {
+        "id": "grimoires-data-hud",
+        "type": "module"
+      },
+      {
+        "id": "fxmaster",
+        "type": "module"
+      }
     ]
   },
   "esmodules": ["scripts/settings.js", "scripts/weather.js", "scripts/tracker.js"],
   "styles": ["styles/tracker.css"],
-  "description": "V13 Travel & Weather Engine. Calculates distance, supplies, and terrain."
+  "description": "Calculates travel pace, supplies, and terrain interaction."
 }
