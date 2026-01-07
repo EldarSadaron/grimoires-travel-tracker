@@ -1,7 +1,7 @@
 export const MODULE_ID = "grimoires-travel-tracker";
 
 export function registerTrackerSettings() {
-    // --- TRAVEL SETTINGS ---
+    // --- MAP SETUP ---
     const getScenes = () => {
         if (!game.scenes) return {};
         return game.scenes.reduce((acc, s) => {
@@ -30,7 +30,7 @@ export function registerTrackerSettings() {
         default: "dnd5e"
     });
 
-    // --- WEATHER SETTINGS (From Living Barovia Code) ---
+    // --- WEATHER ---
     game.settings.register(MODULE_ID, "enableWeather", {
         name: "Enable Weather Engine",
         scope: "world",
@@ -48,11 +48,28 @@ export function registerTrackerSettings() {
         default: 0.6
     });
 
-    // Hidden state tracker
     game.settings.register(MODULE_ID, "weatherState", {
         scope: "world",
         config: false,
         type: Object,
         default: { type: "Overcast" }
+    });
+
+    // --- ENCOUNTERS (NEW) ---
+    game.settings.register(MODULE_ID, "enableEncounters", {
+        name: "Enable Random Encounters",
+        scope: "world",
+        config: true,
+        type: Boolean,
+        default: true
+    });
+
+    game.settings.register(MODULE_ID, "encounterChance", {
+        name: "Encounter Threshold (1-20)",
+        hint: "Roll required to trigger an encounter (Default: 18+).",
+        scope: "world",
+        config: true,
+        type: Number,
+        default: 18
     });
 }
